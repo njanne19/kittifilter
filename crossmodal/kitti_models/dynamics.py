@@ -8,7 +8,7 @@ from . import layers
 
 
 class KittiDynamicsModel(torchfilter.base.DynamicsModel):
-    def __init__(self, units=64):
+    def __init__(self):
         """Initializes a dynamics model for our door task."""
 
         # Here, state dim is 5. 3 for x/y/theta, 1 for forward velocity, 1 for angular velocity
@@ -18,7 +18,7 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
         # At dynamics update, we take the new input control (velocity) 
         # and replace the old velocity in the state
         control_dim = 2
-        self.delta_t = SOMETHING # defined by kitti. 0.1s?
+        self.delta_t = 0.1 # defined by kitti. 0.1s?
 
         # Fixed dynamics covariance
         self.Q_scale_tril = nn.Parameter(
@@ -28,18 +28,6 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
             requires_grad=False,
         )
 
-        # Build neural network
-        self.state_layers = layers.state_layers(units=units)
-        self.control_layers = layers.control_layers(units=units)
-        self.shared_layers = nn.Sequential(
-            nn.Linear(units * 2, units),
-            resblocks.Linear(units),
-            resblocks.Linear(units),
-            resblocks.Linear(units),
-            nn.Linear(units, self.state_dim + 1),
-        )
-        self.units = units
-
     def forward(
         self,
         *,
@@ -48,24 +36,6 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
     ) -> types.StatesTorch:
         N, state_dim = initial_states.shape[:2]
         assert state_dim == self.state_dim
-
-        # # (N, control_dim) => (N, units // 2)
-        # control_features = self.control_layers(controls)
-
-        # # (N, state_dim) => (N, units // 2)
-        # state_features = self.state_layers(initial_states)
-
-        # # (N, units)
-        # merged_features = torch.cat((control_features, state_features), dim=-1)
-
-        # # (N, units * 2) => (N, state_dim + 1)
-        # output_features = self.shared_layers(merged_features)
-
-        # # We separately compute a direction for our network and a scalar "gate"
-        # # These are multiplied to produce our final state output
-        # state_update_direction = output_features[..., :state_dim]
-        # state_update_gate = torch.sigmoid(output_features[..., -1:])
-        # state_update = state_update_direction * state_update_gate
 
         # Since our control actions are forward/angular velocities, and 
         # our state is x/y/theta/forward velocity/angular velocity, 

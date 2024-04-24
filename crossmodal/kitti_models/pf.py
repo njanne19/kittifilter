@@ -8,15 +8,15 @@ from fannypack.nn import resblocks
 
 from ..tasks import DoorTask
 from . import layers
-from .dynamics import DoorDynamicsModelBrent
+from .dynamics import KittiDynamicsModel 
 
 
-class DoorParticleFilter(torchfilter.filters.ParticleFilter, DoorTask.Filter):
+class KittiParticleFilter(torchfilter.filters.ParticleFilter, DoorTask.Filter):
     def __init__(self):
         """Initializes a particle filter for our door task."""
 
         super().__init__(
-            dynamics_model=DoorDynamicsModelBrent(),
+            dynamics_model=KittiDynamicsModel(),
             measurement_model=DoorMeasurementModel(),
             num_particles=30,
         )
