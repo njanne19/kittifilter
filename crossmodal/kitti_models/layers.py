@@ -2,11 +2,9 @@ import torch
 import torch.nn as nn
 from fannypack.nn import resblocks
 
-state_dim = 3
-control_dim = 7
-obs_pos_dim = 3
-obs_sensors_dim = 7
-
+state_dim = 5
+control_dim = 2
+obs_gps_dim = 2
 
 def state_layers(units: int) -> nn.Module:
     """Create a state encoder block.
@@ -41,7 +39,7 @@ def control_layers(units: int) -> nn.Module:
 
 
 def observation_image_layers(units: int) -> nn.Module:
-    """Create an image encoder block.
+    """Create an raw image + difference image  encoder block.
 
     Args:
         units (int): # of hidden units in network layers.
@@ -50,7 +48,7 @@ def observation_image_layers(units: int) -> nn.Module:
         nn.Module: Encoder block.
     """
     return nn.Sequential(
-        nn.Conv2d(in_channels=1, out_channels=32, kernel_size=5, padding=2),
+        nn.Conv2d(in_channels=6, out_channels=32, kernel_size=5, padding=2),
         nn.ReLU(inplace=True),
         resblocks.Conv2d(channels=32, kernel_size=3),
         nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, padding=1),
@@ -62,34 +60,18 @@ def observation_image_layers(units: int) -> nn.Module:
         resblocks.Linear(units),
     )
 
-
-def observation_pos_layers(units: int) -> nn.Module:
-    """Create an end effector position encoder block.
-
-    Args:
+def observation_gps_layers(units: int) -> nn.Module: 
+    """Create a GPS observation encoder block.
+    
+    Args: 
         units (int): # of hidden units in network layers.
-
-    Returns:
-        nn.Module: Encoder block.
+        
+    Returns: 
+        nn.Module: Encoder block. 
     """
+    
     return nn.Sequential(
-        nn.Linear(obs_pos_dim, units),
+        nn.Linear(obs_gps_dim, units), 
         nn.ReLU(inplace=True),
-        resblocks.Linear(units),
-    )
-
-
-def observation_sensors_layers(units: int) -> nn.Module:
-    """Create an F/T sensor encoder block.
-
-    Args:
-        units (int): # of hidden units in network layers.
-
-    Returns:
-        nn.Module: Encoder block.
-    """
-    return nn.Sequential(
-        nn.Linear(obs_sensors_dim, units),
-        nn.ReLU(inplace=True),
-        resblocks.Linear(units),
+        resblocks.Linear(units),    
     )
