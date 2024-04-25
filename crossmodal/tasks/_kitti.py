@@ -154,7 +154,8 @@ def _load_trajectories(
             difference_images = [image[::2, ::2] for image in difference_images]
         
         # Then put together into states and observations 
-        states = np.stack([positions[:, 0:1], positions[:, 1:2], thetas, forward_velocities, angular_velocities], axis=1)
+        print(f"Data Shapes: {raw_images.shape}, {difference_images.shape}, {positions.shape}, {forward_velocities.shape}, {angular_velocities.shape}")
+        states = np.column_stack([positions[:, 0:1], positions[:, 1:2], thetas, forward_velocities, angular_velocities])
         assert states.shape == (timesteps, 5)
         
         observations = {
@@ -196,7 +197,7 @@ def _load_trajectories(
         
         # TODO: Fix controls section, below. Slightly unsure. 
         # Then get controls, which are just the forward and angular velocity
-        controls = np.stack([forward_velocities, angular_velocities], axis=1)
+        controls = np.column_stack([forward_velocities, angular_velocities])
         assert controls.shape == (timesteps, 2)
             
         # Finally, normalize everything 
