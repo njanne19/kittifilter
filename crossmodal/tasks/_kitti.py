@@ -67,7 +67,7 @@ def _load_trajectories(
     sequential_gps_rate: int = 1,
     gps_blackout_ratio: float = 0.0,
     start_timestep: int = 0,
-    full_image_size: bool = True,
+    full_image_size: bool = False,
 ) -> List[torchfilter.types.TrajectoryNumpy]:
     """Loads a list of trajectories from a set of input files, where each trajectory is
     a tuple containing...
@@ -113,6 +113,7 @@ def _load_trajectories(
 
         # We need to decompose the input files into base_dir, 
         # date, and drive number to use pykitti 
+        print(f"From {input_files}")
         drive_path, drive = os.path.split(name) 
         date_path, date = os.path.split(drive_path)
         base_dir = date_path
@@ -149,9 +150,17 @@ def _load_trajectories(
         difference_images = np.array([all_images[i] - all_images[i-1] for i in range(start, len(all_images))])
         
         # Optionally, resize these images 
+        # You should REALLY do this (i.e. do not disable) 
+        # These images are otherwise ginormous 
         if not full_image_size: 
-            raw_images = [image[::2, ::2] for image in raw_images]
-            difference_images = [image[::2, ::2] for image in difference_images]
+            raw_images = np.array([image[::3, ::3] for image in all_images[start:]])
+            difference_images = np.empty_like(raw_images)
+            for i in range(1, len(all_images)): 
+                np.subtract(all_images[i][::3, ::3], all_images[i-1][::3, ::3], out=difference_images[i-1])
+        else: 
+            raw_images = np.array(all_images[start:])
+            difference_images = np.array([all_images[i] - all_images[i-1] for i in range(start, len(all_images))])
+        
         
         # Then put together into states and observations 
         print(f"Data Shapes: {raw_images.shape}, {difference_images.shape}, {positions.shape}, {forward_velocities.shape}, {angular_velocities.shape}")
@@ -202,18 +211,16 @@ def _load_trajectories(
             
         # Finally, normalize everything 
         # States
-        states -= np.mean(states, axis=0)
-        states /= np.std(states, axis=0)
+        states = normalize_data_signal(states) 
         
         # Observations
-        observations["raw_image"] = (observations["raw_image"] - np.mean(raw_images)) / np.std(raw_images)
-        observations["difference_image"] = (observations["difference_image"] - np.mean(difference_images)) / np.std(difference_images)
-        observations["gps_fv"] = (observations["gps_fv"] - np.mean(forward_velocities)) / np.std(forward_velocities)
-        observations["gps_av"] = (observations["gps_av"] - np.mean(angular_velocities)) / np.std(angular_velocities)
-        
+        observations["raw_image"] = normalize_numpy_images(observations["raw_image"]) 
+        observations["difference_image"] = normalize_numpy_images(observations["difference_image"]) 
+        observations["gps_fv"] = normalize_data_signal(observations["gps_fv"])
+        observations["gps_av"] = normalize_data_signal(observations["gps_av"]) 
+
         # Controls
-        controls -= np.mean(controls, axis=0)
-        controls /= np.std(controls, axis=0)
+        controls = normalize_data_signal(controls)
         
         trajectories.append(
             torchfilter.types.TrajectoryNumpy(
@@ -223,12 +230,29 @@ def _load_trajectories(
             )
         )
         
-        del raw_trajectory # Reduce memory usage
+        del raw_trajectory, all_images, raw_images, difference_images, states, observations, controls
 
     ## Uncomment this line to generate the lines required to normalize data
     # _print_normalization(trajectories)
 
     return trajectories
+
+    
+def normalize_numpy_images(images): 
+    """Normalizes a numpy array of images. Assumes the images are in the range [0, 255]."""
+    mean = np.mean(images, axis=(0, 1, 2)) 
+    std = np.std(images, axis=(0, 1, 2))
+    
+    images_normalized = (images - mean)/std
+    return images_normalized
+
+def normalize_data_signal(data):
+    """Normalizes a numpy array of signals. Assumes the signals are in the range [0, 255]."""
+    mean = np.mean(data, axis=0)
+    std = np.std(data, axis=0)
+    
+    data_normalized = (data - mean)/std
+    return data_normalized
 
 
 def _print_normalization(trajectories):
