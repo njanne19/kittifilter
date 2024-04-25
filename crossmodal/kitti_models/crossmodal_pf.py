@@ -9,13 +9,13 @@ from ..base_models import (
     CrossmodalParticleFilterMeasurementModel,
     CrossmodalWeightModel,
 )
-# Todo: Create custom task, layers, DynamicsModel, MeasurementModel
+
 from ..tasks import DoorTask
 from . import layers
 from .dynamics import DoorDynamicsModelBrent
 from .pf import DoorMeasurementModel
 
-
+# TODO: Implement late fusion for kitti 
 class DoorCrossmodalParticleFilter(torchfilter.filters.ParticleFilter, DoorTask.Filter):
     def __init__(self, know_image_blackout: bool = False):
         """Initializes a particle filter for our door task."""

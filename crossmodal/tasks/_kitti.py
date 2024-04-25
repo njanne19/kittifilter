@@ -135,18 +135,18 @@ def _load_trajectories(
         positions = np.array([packet.T_w_imu[:2, 3] for packet in oxts_packets])
         
         # Theta is the yaw angle
-        thetas = np.array([packet.yaw for packet in oxts_packets])
+        thetas = np.array([packet.packet.yaw for packet in oxts_packets])
         
         # Then get forward and angular velocity 
-        forward_velocities = np.array([packet.packet.vf for packet in oxts_packets])
-        angular_velocities = np.array([packet.packet.wz for packet in oxts_packets])
+        forward_velocities = np.expand_dims(np.array([packet.packet.vf for packet in oxts_packets]), 1)
+        angular_velocities = np.expand_dims(np.array([packet.packet.wz for packet in oxts_packets]), 1) 
         
         # Then we need to get the images
-        all_images = [np.array(packet.cam0) for packet in raw_trajectory.cam0]
+        all_images = [np.array(image) for image in raw_trajectory.cam2]
         
         # Use difference image to do visual odometry, also include raw image 
         raw_images = np.array(all_images[start:])
-        difference_images = np.array([raw_images[i] - raw_images[i-1] for i in range(start, len(raw_images))])
+        difference_images = np.array([all_images[i] - all_images[i-1] for i in range(start, len(all_images))])
         
         # Optionally, resize these images 
         if not full_image_size: 
@@ -154,7 +154,7 @@ def _load_trajectories(
             difference_images = [image[::2, ::2] for image in difference_images]
         
         # Then put together into states and observations 
-        states = np.stack([positions[:, 0], positions[:, 1], thetas, forward_velocities, angular_velocities], axis=1)
+        states = np.stack([positions[:, 0:1], positions[:, 1:2], thetas, forward_velocities, angular_velocities], axis=1)
         assert states.shape == (timesteps, 5)
         
         observations = {
@@ -166,14 +166,14 @@ def _load_trajectories(
         
         # Handle sequential and blackout rate 
         if image_blackout_ratio == 0.0: 
-            image_mask = np.zeros((timesteps, 1, 1), dtype=np.float32)
+            image_mask = np.zeros((timesteps, 1, 1, 1), dtype=np.uint8)
             image_mask[::sequential_image_rate, 0, 0] = 1.0
         else: 
             # Apply blackout rate
             image_mask = (
                 (np.random.uniform(size=(timesteps,)) > image_blackout_ratio)
-                .astype(np.float32)
-                .reshape((timesteps, 1, 1))
+                .astype(np.uint8)
+                .reshape((timesteps, 1, 1, 1))
             )
             
         observations["raw_image"] *= image_mask
@@ -181,13 +181,13 @@ def _load_trajectories(
         
         # Do the same for GPS
         if gps_blackout_ratio == 0.0:
-            gps_mask = np.zeros((timesteps, 1, 1), dtype=np.float32)
-            gps_mask[::sequential_gps_rate, 0, 0] = 1.0
+            gps_mask = np.zeros((timesteps, 1), dtype=np.float32)
+            gps_mask[::sequential_gps_rate, 0,] = 1.0
         else:
             gps_mask = (
                 (np.random.uniform(size=(timesteps,)) > gps_blackout_ratio)
                 .astype(np.float32)
-                .reshape((timesteps, 1, 1))
+                .reshape((timesteps, 1))
             )
         
         observations["gps_fv"] *= gps_mask

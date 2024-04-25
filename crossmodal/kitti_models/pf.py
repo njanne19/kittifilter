@@ -10,7 +10,6 @@ from ..tasks import KittiTask
 from . import layers
 from .dynamics import KittiDynamicsModel 
 
-
 class KittiParticleFilter(torchfilter.filters.ParticleFilter, KittiTask.Filter):
     def __init__(self):
         """Initializes a particle filter for our door task."""
