@@ -211,6 +211,32 @@ def run_eval(measurement_initialize=False, eval_dynamics=False) -> Dict[str, flo
         print(f"Y RMSE:     {results['y_rmse_cm']:.8f} cm")
         # print(f"Y RMSE std:     {results['x_rmse_cm_std']:.8f} cm")
         print("-----")
+    
+    elif task == tasks.KittiTask:
+        dataset_stats = globals()["task"].dataset_stats # Get kitti dataset stats
+        rmse = raw_rmse * dataset_stats["state_std"]
+        # rmse_std = raw_rmse_std * np.array([0.39479038, 0.05650279, 0.0565098])
+        results = {
+            "raw_rmse": [float(x) for x in raw_rmse],
+            "x_rmse_cm": float(rmse[0] * 100.0),
+            "y_rmse_cm": float(rmse[1] * 100.0),
+            "theta_rmse_deg": float(rmse[2] * 180.0 / np.pi),
+            "forward_v_rmse_cm": float(rmse[3] * 100.0),
+            "theta_rate_rmse_deg_s": float(rmse[4] * 180.0 / np.pi),
+        }
+        
+        print()
+        print("-----")
+        print(f"Raw RMSE:   {results['raw_rmse']}")
+        print("-----")
+        print(f"Theta RMSE: {results['theta_rmse_deg']:.8f} degrees")
+        print()
+        print(f"X RMSE:     {results['x_rmse_cm']:.8f} cm")
+        print()
+        print(f"Y RMSE:     {results['y_rmse_cm']:.8f} cm")
+        print(f"Forward V RMSE:     {results['forward_v_rmse_cm']:.8f} cm/s")
+        print(f"Theta Rate RMSE:     {results['theta_rate_rmse_deg_s']:.8f} deg/s")
+        print("-----")
     else:
         assert False, "Invalid task!"
 

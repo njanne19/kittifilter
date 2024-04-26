@@ -24,7 +24,7 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
         self.Q_scale_tril = nn.Parameter(
             # I think this is effectively saying, we have 0 uncertainty in position dynamics
             # (since we know newton's law applies) and 0.05 uncertainty in velocity dynamics (m/s) 
-            torch.cholesky(torch.diag(torch.FloatTensor([0.00, 0.00, 0.00, 0.05, 0.05]))),
+            torch.cholesky(torch.diag(torch.FloatTensor([0.01, 0.01, 0.01, 0.05, 0.05]))),
             requires_grad=False,
         )
 

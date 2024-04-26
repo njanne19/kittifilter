@@ -55,7 +55,7 @@ def observation_image_layers(units: int) -> nn.Module:
         nn.ReLU(inplace=True),
         nn.Conv2d(in_channels=16, out_channels=8, kernel_size=3, padding=1),
         nn.Flatten(),  # 32 * 32 * 8
-        nn.Linear(8 * 32 * 32, units),
+        nn.Linear(8 * 124 * 409, units),
         nn.ReLU(inplace=True),
         resblocks.Linear(units),
     )

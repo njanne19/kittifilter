@@ -70,16 +70,17 @@ class KittiMeasurementModel(torchfilter.base.ParticleFilterMeasurementModel):
 
         # Construct observations feature vector
         # (N, obs_dim)
+        
         obs = []
         if "image" in self.modalities:
             stacked_raw_image_and_diff = torch.cat(
-                (observations["image_raw"], observations["image_diff"]), dim=1
+                (observations["raw_image"], observations["difference_image"]), dim=1
             )
             obs.append(
-                self.observation_image_layers(stacked_raw_image_and_diff[:, None, :, :])
+                self.observation_image_layers(stacked_raw_image_and_diff)
             )
         if "gps" in self.modalities:
-            total_gps = torch.cat(observations["gps_fv"], observations["gps_av"], dim=1)
+            total_gps = torch.cat((observations["gps_fv"], observations["gps_av"]), dim=1)
             obs.append(self.observation_gps_layers(total_gps))
             
         observation_features = torch.cat(obs, dim=1)

@@ -10,10 +10,10 @@ import pykitti
 
 from ._task import Task
 
-
 class KittiTask(Task):
+    dataset_stats = {}
+    
     """Dataset definition and model registry for kitti driving task."""
-
     @classmethod
     def add_dataset_arguments(cls, parser: argparse.ArgumentParser) -> None:
         """Add dataset options to an argument parser.
@@ -26,6 +26,7 @@ class KittiTask(Task):
         parser.add_argument("--sequential_gps_rate", type=int, default=1)
         parser.add_argument("--gps_blackout_ratio", type=float, default=0.0)
         parser.add_argument("--full_image_size", action="store_true")
+        parser.add_argument("--kitti-dir", type=str, default="./kitti_dataset")
 
     @classmethod
     def get_dataset_args(cls, args: argparse.Namespace) -> Dict[str, Any]:
@@ -40,6 +41,7 @@ class KittiTask(Task):
             "sequential_gps_rate": args.sequential_gps_rate,
             "gps_blackout_ratio": args.gps_blackout_ratio,
             "full_image_size": args.full_image_size,
+            "kitti_dir": args.kitti_dir,
         }
         return dataset_args
 
@@ -48,7 +50,7 @@ class KittiTask(Task):
         cls, **dataset_args
     ) -> List[torchfilter.types.TrajectoryNumpy]:
         return _load_trajectories(
-            "kitti_dataset/2011_09_30/0033", **dataset_args
+            "2011_09_30/0033", **dataset_args
         )
 
     @classmethod
@@ -56,7 +58,7 @@ class KittiTask(Task):
         cls, **dataset_args
     ) -> List[torchfilter.types.TrajectoryNumpy]:
         return _load_trajectories(
-            "kitti_dataset/2011_09_30/0033", **dataset_args
+            "2011_09_30/0033", **dataset_args
         )
 
 
@@ -68,6 +70,7 @@ def _load_trajectories(
     gps_blackout_ratio: float = 0.0,
     start_timestep: int = 0,
     full_image_size: bool = False,
+    kitti_dir: str = "./kitti_dataset",
 ) -> List[torchfilter.types.TrajectoryNumpy]:
     """Loads a list of trajectories from a set of input files, where each trajectory is
     a tuple containing...
@@ -114,6 +117,7 @@ def _load_trajectories(
         # We need to decompose the input files into base_dir, 
         # date, and drive number to use pykitti 
         print(f"From {input_files}")
+        name = os.path.join(kitti_dir, name)
         drive_path, drive = os.path.split(name) 
         date_path, date = os.path.split(drive_path)
         base_dir = date_path
@@ -168,21 +172,21 @@ def _load_trajectories(
         assert states.shape == (timesteps, 5)
         
         observations = {
-            "raw_image": raw_images,
-            "difference_image": difference_images, 
-            "gps_fv": forward_velocities,
-            "gps_av": angular_velocities
+            "raw_image": raw_images.astype(np.float32),
+            "difference_image": difference_images.astype(np.float32), 
+            "gps_fv": forward_velocities.astype(np.float32),
+            "gps_av": angular_velocities.astype(np.float32) 
         }
         
         # Handle sequential and blackout rate 
         if image_blackout_ratio == 0.0: 
-            image_mask = np.zeros((timesteps, 1, 1, 1), dtype=np.uint8)
+            image_mask = np.zeros((timesteps, 1, 1, 1), dtype=np.float32)
             image_mask[::sequential_image_rate, 0, 0] = 1.0
         else: 
             # Apply blackout rate
             image_mask = (
                 (np.random.uniform(size=(timesteps,)) > image_blackout_ratio)
-                .astype(np.uint8)
+                .astype(np.float32)
                 .reshape((timesteps, 1, 1, 1))
             )
             
@@ -206,21 +210,32 @@ def _load_trajectories(
         
         # TODO: Fix controls section, below. Slightly unsure. 
         # Then get controls, which are just the forward and angular velocity
-        controls = np.column_stack([forward_velocities, angular_velocities])
+        controls = np.column_stack([forward_velocities, angular_velocities]).astype(np.float32)
         assert controls.shape == (timesteps, 2)
             
         # Finally, normalize everything 
         # States
-        states = normalize_data_signal(states) 
+        normalized_states, KittiTask.dataset_stats["state_mean"], KittiTask.dataset_stats["state_std"] = normalize_data_signal(states)
+        states = normalized_states
         
         # Observations
-        observations["raw_image"] = normalize_numpy_images(observations["raw_image"]) 
-        observations["difference_image"] = normalize_numpy_images(observations["difference_image"]) 
-        observations["gps_fv"] = normalize_data_signal(observations["gps_fv"])
-        observations["gps_av"] = normalize_data_signal(observations["gps_av"]) 
+        normalized_raw_images, KittiTask.dataset_stats["raw_image_mean"], KittiTask.dataset_stats["raw_image_std"] = normalize_numpy_images(observations["raw_image"])
+        normalized_difference_images, KittiTask.dataset_stats["difference_image_mean"], KittiTask.dataset_stats["difference_image_std"] = normalize_numpy_images(observations["difference_image"])
+        normalized_gps_fv, KittiTask.dataset_stats["gps_fv_mean"], KittiTask.dataset_stats["gps_fv_std"] = normalize_data_signal(observations["gps_fv"])
+        normalized_gps_av, KittiTask.dataset_stats["gps_av_mean"], KittiTask.dataset_stats["gps_av_std"] = normalize_data_signal(observations["gps_av"])
+        
+        observations["raw_image"] = normalized_raw_images
+        observations["difference_image"] = normalized_difference_images
+        observations["gps_fv"] = normalized_gps_fv
+        observations["gps_av"] = normalized_gps_av
 
         # Controls
-        controls = normalize_data_signal(controls)
+        normalized_controls, KittiTask.dataset_stats["control_mean"], KittiTask.dataset_stats["control_std"] = normalize_data_signal(controls)
+        controls = normalized_controls
+        
+        # Rearrange image data (in place) so that channels are second axis 
+        observations["raw_image"] = np.moveaxis(observations["raw_image"], 3, 1)
+        observations["difference_image"] = np.moveaxis(observations["difference_image"], 3, 1)
         
         trajectories.append(
             torchfilter.types.TrajectoryNumpy(
@@ -244,7 +259,7 @@ def normalize_numpy_images(images):
     std = np.std(images, axis=(0, 1, 2))
     
     images_normalized = (images - mean)/std
-    return images_normalized
+    return images_normalized, mean, std
 
 def normalize_data_signal(data):
     """Normalizes a numpy array of signals. Assumes the signals are in the range [0, 255]."""
@@ -252,7 +267,7 @@ def normalize_data_signal(data):
     std = np.std(data, axis=0)
     
     data_normalized = (data - mean)/std
-    return data_normalized
+    return data_normalized, mean, std
 
 
 def _print_normalization(trajectories):
