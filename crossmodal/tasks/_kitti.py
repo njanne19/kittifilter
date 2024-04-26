@@ -10,6 +10,8 @@ import pykitti
 
 from ._task import Task
 
+USE_DTYPE = np.float32
+
 class KittiTask(Task):
     dataset_stats = {}
     
@@ -166,17 +168,27 @@ def _load_trajectories(
             difference_images = np.array([all_images[i] - all_images[i-1] for i in range(start, len(all_images))])
         
         
-        # Then put together into states and observations 
+        # Then put together into states observations, and controls
         print(f"Data Shapes: {raw_images.shape}, {difference_images.shape}, {positions.shape}, {forward_velocities.shape}, {angular_velocities.shape}")
         states = np.column_stack([positions[:, 0:1], positions[:, 1:2], thetas, forward_velocities, angular_velocities])
         assert states.shape == (timesteps, 5)
+
+        # TODO: Fix controls section, below. Slightly unsure. 
+        # Then get controls, which are just the forward and angular velocity
+        controls = np.column_stack([forward_velocities, angular_velocities])
+        assert controls.shape == (timesteps, 2)
         
         observations = {
-            "raw_image": raw_images.astype(np.float32),
-            "difference_image": difference_images.astype(np.float32), 
-            "gps_fv": forward_velocities.astype(np.float32),
-            "gps_av": angular_velocities.astype(np.float32) 
+            "raw_image": raw_images,
+            "difference_image": difference_images, 
+            "gps_fv": forward_velocities,
+            "gps_av": angular_velocities 
         }
+        
+        # NOTE: Remp all variables to the ideal datatype. Maybe 32, maybe 64
+        observations = remap_to_type(observations, USE_DTYPE) 
+        states = remap_to_type(states, USE_DTYPE)
+        controls = remap_to_type(controls, USE_DTYPE)
         
         # Handle sequential and blackout rate 
         if image_blackout_ratio == 0.0: 
@@ -207,11 +219,6 @@ def _load_trajectories(
         observations["gps_fv"] *= gps_mask
         observations["gps_av"] *= gps_mask
         
-        
-        # TODO: Fix controls section, below. Slightly unsure. 
-        # Then get controls, which are just the forward and angular velocity
-        controls = np.column_stack([forward_velocities, angular_velocities]).astype(np.float32)
-        assert controls.shape == (timesteps, 2)
             
         # Finally, normalize everything 
         # States
@@ -236,6 +243,14 @@ def _load_trajectories(
         # Rearrange image data (in place) so that channels are second axis 
         observations["raw_image"] = np.moveaxis(observations["raw_image"], 3, 1)
         observations["difference_image"] = np.moveaxis(observations["difference_image"], 3, 1)
+
+        # Before appending, assure all types check out. 
+        assert states.dtype == USE_DTYPE
+        assert observations["raw_image"].dtype == USE_DTYPE
+        assert observations["difference_image"].dtype == USE_DTYPE
+        assert observations["gps_fv"].dtype == USE_DTYPE
+        assert observations["gps_av"].dtype == USE_DTYPE
+        assert controls.dtype == USE_DTYPE
         
         trajectories.append(
             torchfilter.types.TrajectoryNumpy(
@@ -269,6 +284,13 @@ def normalize_data_signal(data):
     data_normalized = (data - mean)/std
     return data_normalized, mean, std
 
+
+def remap_to_type(data, dtype):
+
+    if isinstance(data, np.ndarray):
+        return data.astype(dtype)
+    else: 
+        return {k: v.astype(dtype) for k, v in data.items()}
 
 def _print_normalization(trajectories):
     """Helper for producing code to normalize inputs"""

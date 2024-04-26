@@ -8,6 +8,7 @@ from crossmodal.tasks._kitti import KittiTask
 import fannypack 
 import crossmodal 
 
+
 Task = KittiTask
 
 # Parse arguments 
@@ -57,9 +58,9 @@ if isinstance(filter_model, crossmodal.kitti_models.pf.KittiParticleFilter):
     fannypack.utils.freeze_module(filter_model.dynamics_model) 
     
     # Pre-train measurement model 
-    train_helpers.train_pf_measurement(epochs=2, batch_size=64) 
-    eval_helpers.log_eval() 
-    buddy.save_checkpoint("pretrained_measurement")
+    # train_helpers.train_pf_measurement(epochs=2, batch_size=64) 
+    # eval_helpers.log_eval() 
+    # buddy.save_checkpoint("pretrained_measurement")
     
     # Train end-to-end 
     train_helpers.train_e2e(subsequence_length=4, epochs=5, batch_size=32) 
