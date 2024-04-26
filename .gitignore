@@ -10,3 +10,7 @@ checkpoints/
 logs/
 metadata/
 *.cache/
+
+# Project specific 
+scripts/kitti_task/*.png 
+scripts/kitti_task/*.csv

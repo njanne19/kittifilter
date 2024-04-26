@@ -47,17 +47,17 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
         x, y, theta, forward_v, theta_v = torch.unbind(initial_states, dim=-1)
         
         # Get new velocities from the control inputs 
-        forward_v = controls[..., 0]
-        theta_v = controls[..., 1]
+        # forward_v = controls[..., 0]
+        # theta_v = controls[..., 1]
 
         # Update theta 
-        theta += theta_v * self.delta_t
+        theta_new = theta + theta_v * self.delta_t
         
         # Update x and y
-        x += forward_v * torch.cos(theta) * self.delta_t
-        y += forward_v * torch.sin(theta) * self.delta_t
+        x_new = x + forward_v * torch.cos(theta) * self.delta_t
+        y_new = y + forward_v * torch.sin(theta) * self.delta_t
         
         # Return residual-style state update, constant uncertainties
-        states_new = torch.stack((x, y, theta, forward_v, theta_v), dim=-1)
+        states_new = torch.stack((x_new, y_new, theta_new, forward_v, theta_v), dim=-1)
         scale_trils = self.Q_scale_tril[None, :, :].expand(N, state_dim, state_dim)
         return states_new, scale_trils
