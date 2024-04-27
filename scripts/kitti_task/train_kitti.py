@@ -58,16 +58,16 @@ if isinstance(filter_model, crossmodal.kitti_models.pf.KittiParticleFilter):
     fannypack.utils.freeze_module(filter_model.dynamics_model) 
     
     # Pre-train measurement model 
-    train_helpers.train_pf_measurement(epochs=5, batch_size=64) 
+    train_helpers.train_pf_measurement(epochs=100, batch_size=64) 
     eval_helpers.log_eval() 
     buddy.save_checkpoint("pretrained_measurement")
     
     # Train end-to-end 
-    train_helpers.train_e2e(subsequence_length=4, epochs=8, batch_size=16) 
+    train_helpers.train_e2e(subsequence_length=4, epochs=50, batch_size=16) 
     eval_helpers.log_eval() 
     for end_2_end_idx in range(4): 
         print(f"End2End IDX: {end_2_end_idx}")
-        train_helpers.train_e2e(subsequence_length=8, epochs=8, batch_size=10) 
+        train_helpers.train_e2e(subsequence_length=8, epochs=50, batch_size=10) 
         # eval_helpers.log_eval() 
     buddy.save_checkpoint("after_e2e") 
     eval_helpers.log_eval()
@@ -78,7 +78,3 @@ buddy.add_metadata(
         "train_end_time": datetime.datetime.now().strftime("%b %d, %Y @ %-H:%M:%S"),
     }
 )
-
-# Eval model when done
-eval_results = crossmodal.eval_helpers.run_eval()
-buddy.add_metadata({"eval_results": eval_results})
