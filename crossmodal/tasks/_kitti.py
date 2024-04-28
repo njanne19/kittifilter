@@ -133,6 +133,10 @@ def _load_trajectories(
         
         start = 1
         timesteps = len(raw_trajectory.timestamps) - start
+        dts = np.diff(raw_trajectory.timestamps)
+        
+        # Convert to floats 
+        dts = np.array([dt.total_seconds() for dt in dts])
 
         # We want: (x, y, theta, forward velocity, angular velocity) 
         # Start by getting the GPS/IMU packets 
@@ -141,12 +145,20 @@ def _load_trajectories(
         # Then get positions, we are going to ignore z
         positions = np.array([packet.T_w_imu[:2, 3] for packet in oxts_packets])
         
+        # Get full rotation matrices 
+        rotations = np.array([np.array(packet.T_w_imu[:3, :3]).flatten() for packet in oxts_packets])
+        
         # Theta is the yaw angle
         thetas = np.array([packet.packet.yaw for packet in oxts_packets])
         
         # Then get forward and angular velocity 
         forward_velocities = np.expand_dims(np.array([packet.packet.vf for packet in oxts_packets]), 1)
         angular_velocities = np.expand_dims(np.array([packet.packet.wz for packet in oxts_packets]), 1) 
+        
+        # Get accelerations 
+        forward_accelerations = np.expand_dims(np.array([packet.packet.af for packet in oxts_packets]), 1)
+        lateral_accelerations = np.expand_dims(np.array([packet.packet.al for packet in oxts_packets]), 1)
+        upward_accelerations = np.expand_dims(np.array([packet.packet.au for packet in oxts_packets]), 1)
         
         # Then we need to get the images
         all_images = [np.array(image) for image in raw_trajectory.cam2]
@@ -169,14 +181,13 @@ def _load_trajectories(
         
         
         # Then put together into states observations, and controls
-        print(f"Data Shapes: {raw_images.shape}, {difference_images.shape}, {positions.shape}, {forward_velocities.shape}, {angular_velocities.shape}")
-        states = np.column_stack([positions[:, 0:1], positions[:, 1:2], thetas, forward_velocities, angular_velocities])
-        assert states.shape == (timesteps, 5)
+        print(f"Data Shapes: {raw_images.shape}, {difference_images.shape}, {forward_velocities.shape}, {angular_velocities.shape}")
+        states = np.column_stack([forward_velocities, angular_velocities])
+        assert states.shape == (timesteps, 2)
 
-        # TODO: Fix controls section, below. Slightly unsure. 
-        # Then get controls, which are just the forward and angular velocity
-        controls = np.column_stack([forward_velocities, angular_velocities])
-        assert controls.shape == (timesteps, 2)
+        # Then get controls, forward/lateral/upward accelerations + rotation matrix 
+        controls = np.column_stack([forward_accelerations, lateral_accelerations, upward_accelerations, rotations, dts])
+        assert controls.shape == (timesteps, 13)
         
         observations = {
             "raw_image": raw_images,
@@ -260,7 +271,9 @@ def _load_trajectories(
             )
         )
         
-        del raw_trajectory, all_images, raw_images, difference_images, states, observations, controls
+        del raw_trajectory, all_images, raw_images, difference_images, states, 
+        observations, controls, image_mask, gps_mask, normalized_states, normalized_raw_images, 
+        normalized_difference_images, normalized_gps_fv, normalized_gps_av, normalized_controls
 
     ## Uncomment this line to generate the lines required to normalize data
     # _print_normalization(trajectories)

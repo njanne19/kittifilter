@@ -20,7 +20,7 @@ parser.add_argument("--checkpoint_label", type=str, default=None)
 args = parser.parse_args() 
 
 # Create Buddy and read experiment metadata 
-buddy = fannypack.utils.Buddy("plsdontbreak")
+buddy = fannypack.utils.Buddy(args.experiment_name)
 model_type = buddy.metadata["model_type"] 
 dataset_args = buddy.metadata["dataset_args"] 
 
@@ -52,13 +52,6 @@ with torch.no_grad():
         observations.append(fannypack.utils.SliceWrapper(o)[:min_timesteps])
         controls.append(c[:min_timesteps])
 
-        # print(f"States") 
-        # print(states) 
-        # print(f"Observations")
-        # print(observations)
-        # print(f"Controls")
-        # print(controls)
-         
         device = next(filter_model.parameters()).device
         stack_fn = lambda list_value: fannypack.utils.to_torch(
             np.stack(list_value, axis=1), device=device
@@ -105,43 +98,13 @@ with torch.no_grad():
         if len(true_actual_states.shape) == 3:
             true_actual_states = true_actual_states.squeeze(1)
         
-        # Predicted states are corrupted, let's regenerate them. Assume that we start at 0, 0, with theta = 0, 
-        initial_state = np.array([0, 0, 0, 0, 0])
-        regenerated_states = [initial_state]
-        dt = 0.1
-        
-        for i in range(1, true_predicted_states.shape[0]):
-            previous_state = regenerated_states[-1]
-            x, y, theta, vf, wz = previous_state
-            
-            # Replace vf and wz with true_predicted_states 
-            vf = true_predicted_states[i, 3]
-            wz = true_predicted_states[i, 4]
-            
-            # Update x, y, theta 
-            x += vf * np.cos(theta) * dt
-            y += vf * np.sin(theta) * dt
-            theta += wz * dt
-            
-            # Wrap theta to [-pi, pi]
-            theta = (theta + np.pi) % (2 * np.pi) - np.pi
-            
-            # Append the new state to the list 
-            regenerated_states.append([x, y, theta, vf, wz])
-            
-        # Convert regenerated states to numpy array 
-        regenerated_states = np.array(regenerated_states)
-        
-        # And replace true_predicted_states x/y/theta with regenerated x/y/theta
-        true_predicted_states[:, :3] = regenerated_states[:, :3]
-        
         # Take both states (N, 5) and put them into a single pandas data frame 
-        predicted_states_df = pd.DataFrame(true_predicted_states, columns=["x", "y", "theta", "vf", "wz"])
-        true_states_df = pd.DataFrame(true_actual_states, columns=["x", "y", "theta", "vf", "wz"])
+        predicted_states_df = pd.DataFrame(true_predicted_states, columns=["vf", "wz"])
+        true_states_df = pd.DataFrame(true_actual_states, columns=["vf", "wz"])
         
         # Save the data frame to a csv file, located in the same parent directory as this file 
         current_filepath = os.path.dirname(os.path.realpath(__file__))
         
-        predicted_states_df.to_csv(os.path.join(current_filepath, "predicted_states.csv"))
-        true_states_df.to_csv(os.path.join(current_filepath, "true_states.csv"))
+        predicted_states_df.to_csv(os.path.join(current_filepath, "predicted_states.csv"), index=False)
+        true_states_df.to_csv(os.path.join(current_filepath, "true_states.csv"), index=False)
         

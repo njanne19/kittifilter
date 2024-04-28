@@ -31,7 +31,7 @@ class KittiMeasurementModel(torchfilter.base.ParticleFilterMeasurementModel):
         self, units: int = 64, modalities: Set[str] = {"image", "gps"} 
     ): 
         """Initializes a measurement model for our kitti task"""
-        super().__init__(state_dim = 5)
+        super().__init__(state_dim = 2)
 
         valid_modalities = {"image", "gps"} 
         assert len(valid_modalities | modalities) == 2, "Received invalid modality"

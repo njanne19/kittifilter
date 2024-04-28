@@ -8,25 +8,32 @@ from . import layers
 
 
 class KittiDynamicsModel(torchfilter.base.DynamicsModel):
-    def __init__(self):
+    def __init__(self, units=64):
         """Initializes a dynamics model for our door task."""
 
-        # Here, state dim is 5. 3 for x/y/theta, 1 for forward velocity, 1 for angular velocity
-        super().__init__(state_dim=5)
+        # Here, state dim is 2. One for forward velocity, one for angular velocity 
+        super().__init__(state_dim=2)
 
-        # Control dim is 2, one for forward velocity, one for angular velocity
-        # At dynamics update, we take the new input control (velocity) 
-        # and replace the old velocity in the state
-        control_dim = 2
-        self.delta_t = 0.1 # defined by kitti. 0.1s?
+        # Control dim is 13, three are forward/lateral/upward acceleration, nine are are a flattened rotation matrix, one is timestep   
+        control_dim = 13
 
         # Fixed dynamics covariance
         self.Q_scale_tril = nn.Parameter(
-            # I think this is effectively saying, we have 0 uncertainty in position dynamics
-            # (since we know newton's law applies) and 0.05 uncertainty in velocity dynamics (m/s) 
-            torch.linalg.cholesky(torch.diag(torch.FloatTensor([0.01, 0.01, 0.01, 0.05, 0.05]))),
+            torch.linalg.cholesky(torch.diag(torch.FloatTensor([0.05, 0.05]))),
             requires_grad=False,
         )
+
+        # Build the neural network 
+        self.state_layers = layers.state_layers(units=units) 
+        self.control_layers = layers.control_layers(units=units)
+        self.shared_layers = nn.Sequential(
+            nn.Linear(units * 2, units),
+            resblocks.Linear(units),
+            resblocks.Linear(units),
+            resblocks.Linear(units),
+            nn.Linear(units, self.state_dim),
+        )
+        self.units = units
 
     def forward(
         self,
@@ -37,27 +44,26 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
         N, state_dim = initial_states.shape[:2]
         assert state_dim == self.state_dim
 
-        # Since our control actions are forward/angular velocities, and 
-        # our state is x/y/theta/forward velocity/angular velocity, 
-        # we can just replace the last two state dimensions with the control actions, 
-        # and update the position accordingly (after doing the appropriate transformations) 
+        # (N, control_dim) => (N, units // 2)
+        control_features = self.control_layers(controls)
         
-        # First calculate the rotation matrix to rotate forward/velocity vector into 
-        # x velocity, y velocity, and angular velocity
-        x, y, theta, forward_v, theta_v = torch.unbind(initial_states, dim=-1)
+        # (N, state_dim) => (N, units // 2)
+        state_features = self.state_layers(initial_states)
         
-        # Get new velocities from the control inputs 
-        # forward_v = controls[..., 0]
-        # theta_v = controls[..., 1]
+        # (N, units)
+        merged_features = torch.cat((control_features, state_features), dim=-1)
+        
+        # (N, units * 2) => (N, state_dim)
+        output_features = self.shared_layers(merged_features)
+        
+        # We separately compute a direction for our network and a scalar "gate"
+        # These are multiplied to produce our final state output
+        state_update_direction = output_features
+        state_update_gate = torch.sigmoid(output_features[..., -1:])
+        state_update = state_update_direction * state_update_gate
 
-        # Update theta 
-        theta_new = theta + theta_v * self.delta_t
-        
-        # Update x and y
-        x_new = x + forward_v * torch.cos(theta) * self.delta_t
-        y_new = y + forward_v * torch.sin(theta) * self.delta_t
-        
         # Return residual-style state update, constant uncertainties
-        states_new = torch.stack((x_new, y_new, theta_new, forward_v, theta_v), dim=-1)
+        states_new = initial_states + state_update
         scale_trils = self.Q_scale_tril[None, :, :].expand(N, state_dim, state_dim)
         return states_new, scale_trils
+     

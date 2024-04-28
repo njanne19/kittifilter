@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from fannypack.nn import resblocks
 
-state_dim = 5
-control_dim = 2
+state_dim = 2
+control_dim = 13
 obs_gps_dim = 2
 
 def state_layers(units: int) -> nn.Module:
