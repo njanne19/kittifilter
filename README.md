@@ -9,7 +9,7 @@ This code extends upon the README and codebase cited below. To reproduce trainin
 ```
 pip install -e parent_dir/kittifilter
 ```
-4. Reinstall a custom fork of `torchfilter` found (here)[https://github.com/njanne19/torchfilter/tree/master/torchfilter]
+4. Reinstall a custom fork of `torchfilter` found [here](https://github.com/njanne19/torchfilter/tree/master/torchfilter)
 5. Run `kittifilter/scripts/kitti_task/train_kitti.py` with command line arguments to train! Use `-h` for help hints. 
 
 Models, training, and eval scripts for our IROS 2020 conference paper:
