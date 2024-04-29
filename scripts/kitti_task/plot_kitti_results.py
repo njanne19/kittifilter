@@ -33,46 +33,6 @@ plt.grid()
 
 plt.savefig(os.path.join(current_filepath, "predicted_vs_true_wz.png"))
 
-
-# Then, we generate position trajectories for both the true and predicted states. To do this we, 
-# we need to integrate the forward and angular velocity to get the x and y positions.
-
-dt = 0.1 # Defined in Kitti 
-
-def calculate_positions(df, dt):
-    # Initialize the columns for x, y, and theta with zeros
-    df['x'] = 0.0
-    df['y'] = 0.0
-    df['theta'] = 0.0
-
-    # Initialize the current state
-    x, y, theta = 0.0, 0.0, 0.0
-
-    # Iterate through each row in the DataFrame
-    for i in range(1, len(df)):
-        # Get the forward velocity and angular velocity
-        vf = df.loc[i-1, 'vf']
-        wz = df.loc[i-1, 'wz']
-
-        # Update theta
-        theta += wz * dt
-        # Wrap theta to be within -pi to pi
-        theta = np.arctan2(np.sin(theta), np.cos(theta))
-
-        # Update x and y
-        x += vf * np.cos(theta) * dt
-        y += vf * np.sin(theta) * dt
-
-        # Store the updated state in the DataFrame
-        df.loc[i, 'x'] = x
-        df.loc[i, 'y'] = y
-        df.loc[i, 'theta'] = theta
-
-    return df
-
-predicted_states = calculate_positions(predicted_states, dt)
-true_states = calculate_positions(true_states, dt) 
-
 # Plot the predicted and true states, x on x axis, y on y axis 
 plt.figure()
 plt.plot(predicted_states["x"], predicted_states["y"], label="Predicted States")

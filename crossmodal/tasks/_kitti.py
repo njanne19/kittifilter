@@ -7,6 +7,7 @@ import numpy as np
 import torchfilter
 import os 
 import pykitti
+from PIL import Image
 
 from ._task import Task
 
@@ -52,7 +53,7 @@ class KittiTask(Task):
         cls, **dataset_args
     ) -> List[torchfilter.types.TrajectoryNumpy]:
         return _load_trajectories(
-            "2011_09_30/0033", **dataset_args
+            "2011_09_30/0034", **dataset_args
         )
 
     @classmethod
@@ -62,6 +63,16 @@ class KittiTask(Task):
         return _load_trajectories(
             "2011_09_30/0033", **dataset_args
         )
+
+    @classmethod 
+    def get_trajectory_by_filename(
+        cls, filename: str, **dataset_args
+    ) -> List[torchfilter.types.TrajectoryNumpy]: 
+        if isinstance(filename, list): 
+            return _load_trajectories(*filename, **dataset_args)
+        else: 
+            return _load_trajectories(filename, **dataset_args)
+        return 
 
 
 def _load_trajectories(
@@ -73,6 +84,7 @@ def _load_trajectories(
     start_timestep: int = 0,
     full_image_size: bool = False,
     kitti_dir: str = "./kitti_dataset",
+    extras = False
 ) -> List[torchfilter.types.TrajectoryNumpy]:
     """Loads a list of trajectories from a set of input files, where each trajectory is
     a tuple containing...
@@ -103,11 +115,17 @@ def _load_trajectories(
         start_timestep (int, optional): If value is `N`, we skip the first `N` timesteps
             of each trajectory.
         full_image_size (bool, optional): If true, images are not downsampled.
+        extras: If true, we many more parameters in the dataset. 
 
     Returns:
         List[torchfilter.types.TrajectoryNumpy]: list of trajectories.
+
+        if extras is True, we return a tuple of (trajectories, dataset_extras)
     """
     trajectories = []
+
+    if extras: 
+        dataset_extras = []
 
     assert 1 > image_blackout_ratio >= 0
     assert image_blackout_ratio == 0 or sequential_image_rate == 1
@@ -179,6 +197,10 @@ def _load_trajectories(
             raw_images = np.array(all_images[start:])
             difference_images = np.array([all_images[i] - all_images[i-1] for i in range(start, len(all_images))])
         
+        # If the images aren't both 124x409, stretch them ever so slightly so that they are:
+        if raw_images.shape[1] != 124 or raw_images.shape[2] != 409:
+            raw_images = np.array([np.array(Image.fromarray(image).resize((409, 124))) for image in raw_images])
+            difference_images = np.array([np.array(Image.fromarray(image).resize((409, 124))) for image in difference_images]) 
         
         # Then put together into states observations, and controls
         print(f"Data Shapes: {raw_images.shape}, {difference_images.shape}, {forward_velocities.shape}, {angular_velocities.shape}")
@@ -270,6 +292,16 @@ def _load_trajectories(
                 controls[start_timestep:]
             )
         )
+
+        if extras: 
+            extra = {
+                "raw_trajectory": raw_trajectory,
+                "positions": positions,
+                "thetas": thetas,
+                "dts": dts
+            }
+
+            dataset_extras.append(extra)
         
         del raw_trajectory, all_images, raw_images, difference_images, states, 
         observations, controls, image_mask, gps_mask, normalized_states, normalized_raw_images, 
@@ -278,7 +310,10 @@ def _load_trajectories(
     ## Uncomment this line to generate the lines required to normalize data
     # _print_normalization(trajectories)
 
-    return trajectories
+    if extras:
+        return trajectories, dataset_extras
+    else: 
+        return trajectories
 
     
 def normalize_numpy_images(images): 

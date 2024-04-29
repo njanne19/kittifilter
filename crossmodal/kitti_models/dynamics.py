@@ -19,7 +19,7 @@ class KittiDynamicsModel(torchfilter.base.DynamicsModel):
 
         # Fixed dynamics covariance
         self.Q_scale_tril = nn.Parameter(
-            torch.linalg.cholesky(torch.diag(torch.FloatTensor([0.05, 0.05]))),
+            torch.linalg.cholesky(torch.diag(torch.FloatTensor([0.1, 0.1]))),
             requires_grad=False,
         )
 

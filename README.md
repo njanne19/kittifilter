@@ -1,5 +1,17 @@
 # Multimodal Sensor Fusion with Differentiable Filters
 
+## Reproduction for DeepRob 
+This code extends upon the README and codebase cited below. To reproduce training on the kitti dataset (rather than the original examples, shown below), you should do the following things: 
+
+1. Clone this repository in a directory that I'll refer to as `parent_dir`
+2. Create a python virtual environment using conda or pyenv 
+3. Install this repository locally as a python package by doing 
+```
+pip install -e parent_dir/kittifilter
+```
+4. Reinstall a custom fork of `torchfilter` found (here)[https://github.com/njanne19/torchfilter/tree/master/torchfilter]
+5. Run `kittifilter/scripts/kitti_task/train_kitti.py` with command line arguments to train! Use `-h` for help hints. 
+
 Models, training, and eval scripts for our IROS 2020 conference paper:
 
 <blockquote>

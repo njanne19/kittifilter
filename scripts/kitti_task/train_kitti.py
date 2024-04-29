@@ -7,6 +7,7 @@ import crossmodal.kitti_models.pf
 from crossmodal.tasks._kitti import KittiTask
 import fannypack 
 import crossmodal 
+import torchfilter
 
 Task = KittiTask
 
@@ -24,7 +25,7 @@ dataset_args = Task.get_dataset_args(args)
 # Load trajectories into memory 
 print("Loading trajectories from KITTI dataset...")
 train_trajectories = Task.get_train_trajectories()
-eval_trajectories = train_trajectories
+eval_trajectories = Task.get_eval_trajectories()
 
 print(f"Valid model types: {Task.model_types.keys()}")
 
@@ -53,50 +54,76 @@ eval_helpers = crossmodal.eval_helpers
 eval_helpers.configure(buddy=buddy, task=Task, dataset_args=dataset_args)
 
 # Run model-specific training curriculum 
-if isinstance(filter_model, crossmodal.kitti_models.pf.KittiParticleFilter): 
-    pass_pretrained = False
-    # Pre-train dynamics model (single-step)
-    if pass_pretrained: 
-        try: 
-            buddy.load_checkpoint("phase0-dynamics-ss")
-        except: 
+if isinstance(filter_model, torchfilter.filters.ParticleFilter): 
+    finetune = True 
+    finetune_measurement = True
+
+    if not finetune:
+        pass_pretrained = False
+        # Pre-train dynamics model (single-step)
+        if pass_pretrained: 
+            try: 
+                buddy.load_checkpoint("phase0-dynamics-ss")
+            except: 
+                train_helpers.train_pf_dynamics_single_step(epochs=5) 
+                buddy.save_checkpoint("phase0-dynamics-ss")
+        else: 
             train_helpers.train_pf_dynamics_single_step(epochs=5) 
-            buddy.save_checkpoint("phase0-dynamics-ss")
-    else: 
-        train_helpers.train_pf_dynamics_single_step(epochs=5) 
-        buddy.save_checkpoint("phase0-dynamics-ss") 
-    
-    # Pre-train dynamics (recurrent) 
-    if pass_pretrained: 
-        try: 
-            buddy.load_checkpoint("phase1-dynamics-recurrent")
-        except: 
+            buddy.save_checkpoint("phase0-dynamics-ss") 
+        
+        # Pre-train dynamics (recurrent) 
+        if pass_pretrained: 
+            try: 
+                buddy.load_checkpoint("phase1-dynamics-recurrent")
+            except: 
+                train_helpers.train_pf_dynamics_recurrent(subsequence_length=4, epochs=5) 
+                train_helpers.train_pf_dynamics_recurrent(subsequence_length=8, epochs=5) 
+                buddy.save_checkpoint("phase1-dynamics-recurrent")
+        else: 
             train_helpers.train_pf_dynamics_recurrent(subsequence_length=4, epochs=5) 
             train_helpers.train_pf_dynamics_recurrent(subsequence_length=8, epochs=5) 
+            eval_helpers.log_eval()
             buddy.save_checkpoint("phase1-dynamics-recurrent")
-    else: 
-        train_helpers.train_pf_dynamics_recurrent(subsequence_length=4, epochs=5) 
-        train_helpers.train_pf_dynamics_recurrent(subsequence_length=8, epochs=5) 
+        
+        # Freeze dynamics 
+        fannypack.utils.freeze_module(filter_model.dynamics_model) 
+        
+        # Pre-train measurement model 
+        train_helpers.train_pf_measurement(epochs=20, batch_size=64) 
+        eval_helpers.log_eval() 
+        buddy.save_checkpoint("pretrained_measurement")
+        
+        # Train end-to-end 
+        train_helpers.train_e2e(subsequence_length=4, epochs=20, batch_size=16) 
+        eval_helpers.log_eval() 
+        for end_2_end_idx in range(4): 
+            print(f"End2End IDX: {end_2_end_idx}")
+            train_helpers.train_e2e(subsequence_length=8, epochs=20, batch_size=10) 
+            # eval_helpers.log_eval() 
+        buddy.save_checkpoint("after_e2e") 
         eval_helpers.log_eval()
-        buddy.save_checkpoint("phase1-dynamics-recurrent")
     
-    # Freeze dynamics 
-    fannypack.utils.freeze_module(filter_model.dynamics_model) 
-    
-    # Pre-train measurement model 
-    train_helpers.train_pf_measurement(epochs=10, batch_size=64) 
-    eval_helpers.log_eval() 
-    buddy.save_checkpoint("pretrained_measurement")
-    
-    # Train end-to-end 
-    train_helpers.train_e2e(subsequence_length=4, epochs=10, batch_size=16) 
-    eval_helpers.log_eval() 
-    for end_2_end_idx in range(4): 
-        print(f"End2End IDX: {end_2_end_idx}")
-        train_helpers.train_e2e(subsequence_length=8, epochs=10, batch_size=10) 
-        # eval_helpers.log_eval() 
-    buddy.save_checkpoint("after_e2e") 
-    eval_helpers.log_eval()
+    else: 
+        if finetune_measurement: 
+            try: 
+                buddy.load_checkpoint("after_e2e_finetune")
+            except: 
+                buddy.load_checkpoint("after_e2e") 
+            
+            # train_helpers.train_pf_dynamics_recurrent(subsequence_length=8, epochs=15) 
+            train_helpers.train_pf_measurement(epochs=30, batch_size=64) 
+            eval_helpers.log_eval() 
+            train_helpers.train_e2e(subsequence_length=8, epochs=50, batch_size=10) 
+            buddy.save_checkpoint("after_e2e_finetune") 
+            eval_helpers.log_eval()
+        else: 
+            try: 
+                buddy.load_checkpoint("after_e2e_finetune")
+            except: 
+                buddy.load_checkpoint("after_e2e") 
+            train_helpers.train_e2e(subsequence_length=8, epochs=20, batch_size=10) 
+            buddy.save_checkpoint("after_e2e_finetune") 
+            eval_helpers.log_eval()
 
 # Add training end time
 buddy.add_metadata(

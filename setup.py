@@ -4,13 +4,13 @@ setup(
     name="crossmodal",
     version="0.0",
     description="Crossmodal filtering",
-    url="http://github.com/brentyi/multimodalfilter",
-    author="brentyi",
-    author_email="brentyi@berkeley.edu",
+    url="http://github.com/njanne19/kittifilter",
+    author="njanne19",
+    author_email="njanne@umich.edu",
     license="BSD",
     packages=["crossmodal"],
     install_requires=[
         "fannypack",
-        "torchfilter @ https://github.com/stanford-iprl-lab/torchfilter/tarball/master",
+        "torchfilter",
     ],
 )

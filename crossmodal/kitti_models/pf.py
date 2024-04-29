@@ -11,13 +11,31 @@ from . import layers
 from .dynamics import KittiDynamicsModel 
 
 class KittiParticleFilter(torchfilter.filters.ParticleFilter, KittiTask.Filter):
-    def __init__(self):
-        """Initializes a particle filter for our door task."""
+    def __init__(self, **kwargs):
+        """Initializes a particle filter for our kitti task."""
 
         super().__init__(
             dynamics_model=KittiDynamicsModel(),
             measurement_model=KittiMeasurementModel(),
             num_particles=30,
+            **kwargs,
+        )
+
+    def train(self, mode: bool = True):
+        """Adjust particle count based on train vs eval mode."""
+        self.num_particles = 30 if mode else 300
+        super().train(mode)
+
+
+class KittiMonoParticleFilter(torchfilter.filters.ParticleFilter, KittiTask.Filter):
+    def __init__(self, **kwargs):
+        """Initializes a particle filter for our kitti task."""
+
+        super().__init__(
+            dynamics_model=KittiDynamicsModel(),
+            measurement_model=KittiMeasurementModel(modalities={"image"}),
+            num_particles=30,
+            **kwargs,
         )
 
     def train(self, mode: bool = True):
